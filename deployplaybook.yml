@@ -1,0 +1,25 @@
+---
+- hosts: all
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+  - name: Docker is installing
+    apt:
+      pkg: docker.io
+      state: present
+  - name: python3-docker is installing
+    apt:
+      pkg: python3-docker
+      state: present
+  - name: start docker service
+    service:
+      name: docker
+      state: started
+      enabled: true
+  - name: remove container if present
+    docker_container:
+      name: finalbootcampcasestudy
+      state: absent
+  - name: deploy finalbootcamp  application
+    command: sudo docker run -it -d -p 8888:8888 --name finalbootcampcasestudy abhinikki/springboot:1.0
