@@ -1,0 +1,87 @@
+try{
+    node{
+        def mavenHome
+        def mavenCMD
+        def docker
+        def dockerCMD
+        def tagName = "1.0"
+        
+        stage('Preparation'){
+            echo "Preparing the Jenkins environment with required tools..."
+            mavenHome = tool name: 'AbhinavMaven', type: 'maven'
+            mavenCMD = "${mavenHome}/bin/mvn"
+            docker = tool name: 'AbhinavDocker', type: 'org.jenkinsci.plugins.docker.commons.tools.DockerTool'
+            dockerCMD = "$docker/bin/docker"
+            scannerHome = tool name: 'AbhinavSonarqube'
+        }
+        
+        stage('git checkout'){
+            echo "Checking out the code from git repository..."
+            git 'https://github.com/abhinikki/batch10.git'
+        }
+        
+        stage('Build, Test and Package'){
+            echo "Building the addressbook application..."
+            sh "${mavenCMD} clean package"
+            sh "${mavenCMD} test site"
+        }
+        
+        stage('Sonar Scan'){
+            echo "Scanning application for vulnerabilities..."
+            withSonarQubeEnv(credentialsId: 'sonartoken') {
+                sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=bootcampfinal \
+                                                     -Dsonar.java.binaries=."
+            }
+        }
+        
+        stage('publish report'){
+            echo " Publishing HTML report.."
+            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: '/var/lib/jenkins/workspace/DevOpsPipeline/target/site', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: ''])
+        }
+        
+        stage('Build Docker Image'){
+            echo "Building docker image for bootcamp application ..."
+            sh "${dockerCMD} build -t abhinikki/springboot:${tagName} ."
+        }
+        
+        stage("Push Docker Image to Docker Registry"){
+            echo "Pushing image to docker hub"
+            withCredentials([usernamePassword(credentialsId: 'dockerID', usernameVariable: 'dockerusername', passwordVariable: 'dockerpassword')]) {
+            sh "${dockerCMD} login -u ${dockerusername} -p ${dockerpassword}"
+            sh "${dockerCMD} push abhinikki/springboot:${tagName}"
+            }
+        }
+        
+        stage('Deploy Application'){
+            echo "Installing desired software.."
+            echo "Bring docker service up and running"
+            echo "Deploying addressbook application"
+            ansiblePlaybook credentialsId: 'SSHAnsible1', disableHostKeyChecking: true, installation: 'AbhinavAnsible', inventory: '/etc/ansible/hosts', playbook: 'deployplaybook.yml'
+        }
+        
+        stage('Clean up'){
+            echo "Cleaning up the workspace..."
+            cleanWs()
+        }
+        
+        stage('All done. Set Success flag') {
+            currentBuild.result="SUCCESS"
+        }
+    }
+}
+catch(Exception err){
+    echo "Exception occured..."
+    currentBuild.result="FAILURE"
+    //send an failure email notification to the user.
+}
+finally {
+    (currentBuild.result!= "ABORTED") && node("master") {
+        echo "finally gets executed and end an email notification for every build"
+        if (currentBuild.result == "SUCCESS") {
+            emailext body: 'Successful Build Abhinav, well done', subject: 'Build report', to: 'abhinav.nikki@gmail.com'
+        } else if (currentBuild.result == "FAILURE") {
+            emailext body: 'Build failed Abhinav, Fix it', subject: 'Build report', to: 'abhinav.nikki@gmail.com'
+        }
+    }
+    
+}
