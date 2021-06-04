@@ -19,7 +19,7 @@
       enabled: true
   - name: remove container if present
     docker_container:
-      name: finalbootcampcasestudy
+      name: finalbootcamp
       state: absent
-  - name: deploy finalbootcamp  application
-    command: sudo docker run -it -d -p 8888:8888 --name finalbootcampcasestudy abhinikki/springboot:1.0
+  - name: deploy finalbootcamp application
+    command: sudo docker run -it -d -p 8888:8888 --name finalbootcamp abhinikki/springboot:1.0
